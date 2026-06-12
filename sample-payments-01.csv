@@ -1,0 +1,6 @@
+paymentRef,storeId,coffeeType,price,currency,loyaltyCardId
+shift-01-001,store-london-01,LATTE,3.50,EUR,card-01-1001
+shift-01-002,store-london-01,ESPRESSO,2.20,EUR,card-01-1002
+shift-01-003,store-london-01,CAPPUCCINO,3.80,EUR,card-01-1003
+shift-01-004,store-london-01,FLAT_WHITE,4.10,EUR,card-01-1004
+shift-01-005,store-london-01,MOCHA,4.40,EUR,card-01-1005

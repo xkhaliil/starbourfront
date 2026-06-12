@@ -1,36 +1,120 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Redirect Load Balancer
 
-## Getting Started
+This project contains a simple redirect load balancer built with Next.js.
 
-First, run the development server:
+## Design
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Redirect endpoint: `/loadbalancer`
+- Redirect type: `HTTP 302`
+- Service list: static list from `LB_UPSTREAMS`
+- Health check: `GET /api/health`
+- Algorithm: round robin between healthy services
+
+## Routes
+
+- `/loadbalancer`: redirects to the next healthy service
+- `/api/services`: shows services and health status
+- `/api/health`: health endpoint for one instance
+
+## Run
+
+```powershell
+$env:LB_UPSTREAMS="http://localhost:8081,http://localhost:8082,http://localhost:8083"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start 3 app instances:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm run dev -- --port 8081
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm run dev -- --port 8082
+```
 
-## Learn More
+```powershell
+npm run dev -- --port 8083
+```
 
-To learn more about Next.js, take a look at the following resources:
+Start the balancer:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+$env:LB_UPSTREAMS="http://localhost:8081,http://localhost:8082,http://localhost:8083"
+npm run dev -- --port 3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Test
 
-## Deploy on Vercel
+### 1. Test Redirect
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Run:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```powershell
+curl.exe -I http://localhost:3000/loadbalancer
+```
+
+- Expected: status `302`
+- Expected: `Location` points to `8081`, `8082`, or `8083`
+
+### 2. Test Service List
+
+Open:
+
+- `http://localhost:3000/api/services`
+
+- Expected: configured services, algorithm, and health status
+
+### 3. Test Health Check
+
+Open these directly:
+
+- `http://localhost:8081/api/health`
+- `http://localhost:8082/api/health`
+- `http://localhost:8083/api/health`
+
+Then open:
+
+- `http://localhost:3000/api/services`
+
+- Expected: healthy instances show `"healthy": true`
+
+### 4. Test Round Robin
+
+Run several times:
+
+```powershell
+curl.exe -I http://localhost:3000/loadbalancer
+curl.exe -I http://localhost:3000/loadbalancer
+curl.exe -I http://localhost:3000/loadbalancer
+```
+
+- Expected: redirects rotate between `8081`, `8082`, and `8083`
+
+### 5. Test Failure
+
+Stop one app instance, for example the one on `8082`.
+
+Then open:
+
+- `http://localhost:3000/api/services`
+
+- Expected: `8082` becomes unhealthy
+
+Run again:
+
+```powershell
+curl.exe -I http://localhost:3000/loadbalancer
+curl.exe -I http://localhost:3000/loadbalancer
+```
+
+- Expected: redirects skip the stopped instance
+
+### 6. Test No Healthy Services
+
+Stop all worker instances and run:
+
+```powershell
+curl.exe -I http://localhost:3000/loadbalancer
+```
+
+- Expected: status `503`

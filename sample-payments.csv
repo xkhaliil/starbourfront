@@ -1,0 +1,17 @@
+paymentRef,storeId,coffeeType,price,currency,loyaltyCardId
+shift-001,store-london-01,LATTE,3.50,EUR,card-1001
+shift-002,store-london-01,ESPRESSO,2.20,EUR,card-1002
+shift-003,store-london-01,CAPPUCCINO,3.80,EUR,card-1003
+shift-004,store-london-01,FLAT_WHITE,4.10,EUR,card-1004
+shift-005,store-london-01,MOCHA,4.40,EUR,card-1005
+shift-006,store-london-01,AMERICANO,2.90,EUR,card-1006
+shift-007,store-london-01,DOUBLE_ESPRESSO,2.90,EUR,card-1007
+shift-008,store-london-01,CORTADO,3.10,EUR,card-1008
+shift-009,store-london-01,MACCHIATO,3.00,EUR,card-1009
+shift-010,store-london-01,COLD_BREW,4.60,EUR,card-1010
+shift-011,store-london-01,LATTE,3.70,EUR,card-1011
+shift-012,store-london-01,CAPPUCCINO,3.90,EUR,card-1012
+shift-013,store-london-01,ESPRESSO,2.30,EUR,card-1013
+shift-014,store-london-01,AMERICANO,3.00,EUR,card-1014
+shift-015,store-london-01,FLAT_WHITE,4.20,EUR,card-1015
+shift-016,store-london-01,MOCHA,4.50,EUR,card-1016
