@@ -11,11 +11,11 @@ export default function Home() {
   return (
     <main className="page-shell">
       <section className="hero">
-        <h1>Payment Import</h1>
+        <h1>Async Payment Import</h1>
         <p className="muted">
-          CSV columns: <code>coffeeType</code>, <code>price</code>,{" "}
-          <code>currency</code>, <code>loyaltyCardId</code>. Optional:{" "}
-          <code>paymentRef</code>, <code>storeId</code>.
+          Upload a CSV, store the bulk request in Postgres, get a request ID
+          back, then poll the request status while payments are sent in the
+          background and written to static database shards.
         </p>
       </section>
 

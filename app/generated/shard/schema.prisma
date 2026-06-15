@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/shard"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SHARD_DATABASE_URL")
+}
+
+model Payment {
+  id              String   @id @db.Uuid
+  requestId       String   @db.Uuid
+  itemId          String   @unique @db.Uuid
+  shardKey        String
+  storeId         String
+  paymentRef      String
+  coffeeType      String
+  price           Float
+  currency        String
+  loyaltyCardId   String
+  remotePaymentId String
+  createdAt       DateTime @default(now())
+}

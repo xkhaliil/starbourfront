@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { importPaymentsAction } from "./actions";
 import type { ImportState } from "./lib/payment-import";
 
@@ -13,10 +13,36 @@ function submitLabel(pending: boolean) {
 }
 
 export function ImporterForm({ initialState }: ImporterFormProps) {
-  const [state, formAction, pending] = useActionState(
+  const [actionState, formAction, pending] = useActionState(
     importPaymentsAction,
     initialState,
   );
+  const [polledState, setPolledState] = useState<ImportState | null>(null);
+  const state =
+    polledState && polledState.requestId === actionState.requestId
+      ? polledState
+      : actionState;
+
+  useEffect(() => {
+    if (!state.requestId || state.requestStatus === "done") {
+      return;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      const response = await fetch(`/api/requests/${state.requestId}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const nextState = (await response.json()) as ImportState;
+      setPolledState(nextState);
+    }, 1500);
+
+    return () => window.clearInterval(intervalId);
+  }, [state.requestId, state.requestStatus]);
 
   return (
     <div className="stack">
@@ -55,13 +81,23 @@ export function ImporterForm({ initialState }: ImporterFormProps) {
       </section>
 
       <section className="card">
-        <p className={state.kind === "error" ? "status error" : "status success"}>
+        <p
+          className={state.kind === "error" ? "status error" : "status success"}
+        >
           {state.message}
         </p>
 
         <p className="summary-line">
-          {state.summary.totalRows} rows, {state.summary.created} created,{" "}
-          {state.summary.replayed} replayed, {state.summary.failed} failed
+          Request ID: <code>{state.requestId ?? "-"}</code>
+        </p>
+
+        <p className="summary-line">
+          Status: <strong>{state.requestStatus ?? "-"}</strong>
+        </p>
+
+        <p className="summary-line">
+          {state.summary.totalRows} rows, {state.summary.processed} processed,{" "}
+          {state.summary.success} successful, {state.summary.failed} failed
         </p>
 
         {state.rows.length > 0 ? (
@@ -71,20 +107,22 @@ export function ImporterForm({ initialState }: ImporterFormProps) {
                 <tr>
                   <th>Row</th>
                   <th>Source</th>
+                  <th>Shard</th>
                   <th>Result</th>
                   <th>Attempts</th>
-                  <th>Payment ID</th>
+                  <th>Remote ID</th>
                   <th>Message</th>
                 </tr>
               </thead>
               <tbody>
                 {state.rows.map((row) => (
-                  <tr key={`${row.rowNumber}-${row.idempotencyKey}`}>
+                  <tr key={`${row.rowNumber}-${row.sourceReference}`}>
                     <td>{row.rowNumber}</td>
                     <td>{row.sourceReference}</td>
+                    <td>{row.shardIndex}</td>
                     <td>{row.status}</td>
                     <td>{row.attempts}</td>
-                    <td>{row.paymentId ?? "-"}</td>
+                    <td>{row.remotePaymentId ?? "-"}</td>
                     <td>{row.message}</td>
                   </tr>
                 ))}

@@ -1,120 +1,125 @@
-# Redirect Load Balancer
+# Async Payment Processing
 
-This project contains a simple redirect load balancer built with Next.js.
+This project converts bulk payment import from synchronous processing to
+asynchronous processing.
 
 ## Design
 
-- Redirect endpoint: `/loadbalancer`
-- Redirect type: `HTTP 302`
-- Service list: static list from `LB_UPSTREAMS`
-- Health check: `GET /api/health`
-- Algorithm: round robin between healthy services
+- When a CSV bulk request is received, the request and its items are stored in a
+  relational database.
+- Prisma ORM is used for all database access.
+- The client gets a request ID immediately.
+- The client can query request status by this ID.
+- Each payment is sent to the remote payment system in the background.
+- When a remote payment succeeds, a payment row is stored in a database shard.
+- The number of shards is static and configured by environment variables.
 
-## Routes
+## Database Layout
 
-- `/loadbalancer`: redirects to the next healthy service
-- `/api/services`: shows services and health status
-- `/api/health`: health endpoint for one instance
+- `CONTROL_DATABASE_URL`: Postgres database used for:
+  - `bulk_requests`
+  - `bulk_request_items`
+- `SHARD_DATABASE_URLS`: comma-separated Postgres URLs used for the sharded
+  `payments` table
+- Prisma schemas:
+  - `prisma/control.prisma`
+  - `prisma/shard.prisma`
+
+Example:
+
+```powershell
+$env:CONTROL_DATABASE_URL="postgres://postgres:postgres@localhost:5432/payments_control"
+$env:SHARD_DATABASE_URLS="postgres://postgres:postgres@localhost:5433/payments_shard_1,postgres://postgres:postgres@localhost:5434/payments_shard_2"
+```
+
+## Main Routes
+
+- `/`: upload CSV and create an async bulk request
+- `/api/requests/{requestId}`: query request status
+- `/api/health`: health endpoint
+- `/loadbalancer`: simple redirect load balancer from the previous task
 
 ## Run
 
-```powershell
-$env:LB_UPSTREAMS="http://localhost:8081,http://localhost:8082,http://localhost:8083"
-```
-
-Start 3 app instances:
+Set the database variables:
 
 ```powershell
-npm run dev -- --port 8081
+$env:CONTROL_DATABASE_URL="postgres://postgres:postgres@localhost:5432/payments_control"
+$env:SHARD_DATABASE_URLS="postgres://postgres:postgres@localhost:5433/payments_shard_1,postgres://postgres:postgres@localhost:5434/payments_shard_2"
 ```
+
+Generate Prisma clients:
 
 ```powershell
-npm run dev -- --port 8082
+npm run prisma:generate
 ```
+
+Create the tables:
 
 ```powershell
-npm run dev -- --port 8083
+npx prisma db push --schema prisma/control.prisma
+$env:SHARD_DATABASE_URL="postgres://postgres:postgres@localhost:5433/payments_shard_1"
+npx prisma db push --schema prisma/shard.prisma
+$env:SHARD_DATABASE_URL="postgres://postgres:postgres@localhost:5434/payments_shard_2"
+npx prisma db push --schema prisma/shard.prisma
 ```
 
-Start the balancer:
+Start the app:
 
 ```powershell
-$env:LB_UPSTREAMS="http://localhost:8081,http://localhost:8082,http://localhost:8083"
-npm run dev -- --port 3000
+npm run dev
 ```
+
+## Async Flow
+
+1. Upload a CSV file from the home page.
+2. The app stores the bulk request in Postgres.
+3. The app returns a request ID immediately.
+4. The UI polls `/api/requests/{requestId}`.
+5. Background processing sends each payment to the remote system.
+6. Successful payments are inserted into one shard based on a hash of
+   `storeId + paymentRef`.
+7. The request ends with status `done`.
 
 ## Test
 
-### 1. Test Redirect
+### 1. Queue A Bulk Request
 
-Run:
+- Open `http://localhost:3000`
+- Upload a valid CSV
+- Expected:
+  - request ID appears immediately
+  - request status starts as `queued` or `processing`
 
-```powershell
-curl.exe -I http://localhost:3000/loadbalancer
-```
+### 2. Query Request Status
 
-- Expected: status `302`
-- Expected: `Location` points to `8081`, `8082`, or `8083`
+- Open:
+  - `http://localhost:3000/api/requests/<request-id>`
+- Expected:
+  - request status
+  - processed count
+  - success count
+  - failed count
+  - item-level status
 
-### 2. Test Service List
+### 3. Verify Async Processing
 
-Open:
+- Submit a CSV with multiple rows
+- Expected:
+  - response returns quickly
+  - rows move from `queued` -> `processing` -> `done` or `failed`
 
-- `http://localhost:3000/api/services`
+### 4. Verify Sharding
 
-- Expected: configured services, algorithm, and health status
+- Configure at least 2 shard database URLs in `SHARD_DATABASE_URLS`
+- Submit payments with different `storeId` / `paymentRef`
+- Expected:
+  - rows are inserted into different shard databases
+  - each row shows its selected shard index in the UI
 
-### 3. Test Health Check
+## Notes
 
-Open these directly:
-
-- `http://localhost:8081/api/health`
-- `http://localhost:8082/api/health`
-- `http://localhost:8083/api/health`
-
-Then open:
-
-- `http://localhost:3000/api/services`
-
-- Expected: healthy instances show `"healthy": true`
-
-### 4. Test Round Robin
-
-Run several times:
-
-```powershell
-curl.exe -I http://localhost:3000/loadbalancer
-curl.exe -I http://localhost:3000/loadbalancer
-curl.exe -I http://localhost:3000/loadbalancer
-```
-
-- Expected: redirects rotate between `8081`, `8082`, and `8083`
-
-### 5. Test Failure
-
-Stop one app instance, for example the one on `8082`.
-
-Then open:
-
-- `http://localhost:3000/api/services`
-
-- Expected: `8082` becomes unhealthy
-
-Run again:
-
-```powershell
-curl.exe -I http://localhost:3000/loadbalancer
-curl.exe -I http://localhost:3000/loadbalancer
-```
-
-- Expected: redirects skip the stopped instance
-
-### 6. Test No Healthy Services
-
-Stop all worker instances and run:
-
-```powershell
-curl.exe -I http://localhost:3000/loadbalancer
-```
-
-- Expected: status `503`
+- The code uses Prisma ORM and keeps the DB layer intentionally simple.
+- Sharding is static.
+- Resharding is not implemented.
+- The database schema is created with `prisma db push`.

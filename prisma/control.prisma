@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/control"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CONTROL_DATABASE_URL")
+}
+
+enum RequestStatus {
+  queued
+  processing
+  done
+}
+
+enum ItemStatus {
+  queued
+  processing
+  done
+  failed
+}
+
+model BulkRequest {
+  id              String            @id @db.Uuid
+  remoteBaseUrl   String
+  fallbackStoreId String?
+  status          RequestStatus     @default(queued)
+  totalCount      Int
+  processedCount  Int               @default(0)
+  successCount    Int               @default(0)
+  failedCount     Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  items           BulkRequestItem[]
+}
+
+model BulkRequestItem {
+  id              String      @id @db.Uuid
+  requestId       String      @db.Uuid
+  request         BulkRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  rowNumber       Int
+  shardIndex      Int
+  sourceReference String
+  paymentRef      String
+  storeId         String
+  coffeeType      String
+  price           Float
+  currency        String
+  loyaltyCardId   String
+  status          ItemStatus  @default(queued)
+  attempts        Int         @default(0)
+  remotePaymentId String?
+  error           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([requestId, rowNumber])
+}
